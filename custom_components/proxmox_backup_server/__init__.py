@@ -3,7 +3,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from datetime import timedelta
-from .const import DOMAIN, UPDATE_INTERVAL, CONF_HOST, CONF_PORT, CONF_USERNAME, CONF_TOKEN_ID, CONF_TOKEN_SECRET, CONF_VERIFY_SSL
+from .const import DOMAIN, UPDATE_INTERVAL, CONF_HOST, CONF_PORT, CONF_USERNAME, CONF_PASSWORD, CONF_VERIFY_SSL
 from .api import PBSClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -12,11 +12,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
     user = entry.data[CONF_USERNAME]
-    token_id = entry.data[CONF_TOKEN_ID]
-    secret = entry.data[CONF_TOKEN_SECRET]
+    password = entry.data[CONF_PASSWORD]
     verify_ssl = entry.data.get(CONF_VERIFY_SSL, False)
 
-    client = PBSClient(host, port, user, token_id, secret, verify_ssl)
+    client = PBSClient(host, port, user, password, verify_ssl)
     
     async def async_update_data():
         try:

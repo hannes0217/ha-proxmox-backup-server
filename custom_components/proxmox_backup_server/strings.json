@@ -3,20 +3,19 @@
     "step": {
       "user": {
         "title": "Proxmox Backup Server Setup",
-        "description": "Please enter your PBS details and API Token (PBSAPIToken format: USER!TOKENID:SECRET).",
+        "description": "Please enter your PBS details and credentials.",
         "data": {
           "host": "Host (IP or FQDN)",
           "port": "Port",
           "username": "Username (e.g. root@pam)",
-          "token_id": "Token ID",
-          "token_secret": "Token Secret",
+          "password": "Password",
           "verify_ssl": "Verify SSL certificate"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to PBS. Please check host and port.",
-      "invalid_auth": "Authentication failed. Check username and API token.",
+      "cannot_connect": "Failed to connect to PBS. Please check host, port and credentials.",
+      "invalid_auth": "Authentication failed. Check username and password.",
       "unknown": "Unexpected error occurred."
     },
     "abort": {
