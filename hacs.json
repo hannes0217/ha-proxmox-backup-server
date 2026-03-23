@@ -1,0 +1,6 @@
+{
+  "name": "Proxmox Backup Server",
+  "description": "Integration to monitor and manage Proxmox Backup Server (PBS) from Home Assistant.",
+  "render_readme": true,
+  "zip_release": false
+}
