@@ -1,0 +1,9 @@
+{
+  "domain": "proxmox_backup_server",
+  "name": "Proxmox Backup Server",
+  "codeowners": ["@hannes0217"],
+  "config_flow": true,
+  "documentation": "https://github.com/hannes0217/ha-proxmox-backup-server",
+  "iot_class": "local_polling",
+  "version": "0.1.0"
+}
