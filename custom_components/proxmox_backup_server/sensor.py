@@ -68,8 +68,8 @@ class PBSDatastoreSensor(PBSBaseEntity, SensorEntity):
             self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_icon = "mdi:chart-donut"
         elif sensor_type in ["total", "used", "avail"]:
-            # Hard-coding Gigabytes and manual rounding to ensure clean UI
-            self._attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
+            # Back to Bytes to preserve native data class, but setting device_class for HA scaling
+            self._attr_native_unit_of_measurement = UnitOfInformation.BYTES
             self._attr_device_class = SensorDeviceClass.DATA_SIZE
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -88,10 +88,6 @@ class PBSDatastoreSensor(PBSBaseEntity, SensorEntity):
             used = data.get("used", 0)
             return round((used / total * 100), 2) if total > 0 else 0
         
-        # Convert Bytes to Gigabytes for the UI
-        if self.sensor_type in ["total", "used", "avail"]:
-            return round(raw_value / (1024**3), 2)
-        
         return raw_value
 
 class PBSGCSensor(PBSBaseEntity, SensorEntity):
@@ -101,7 +97,7 @@ class PBSGCSensor(PBSBaseEntity, SensorEntity):
         self.store_name = store_name
         self._attr_name = f"{store_name} GC Removed"
         self._attr_unique_id = f"pbs_{coordinator.config_entry.data['host']}_{store_name}_gc_removed"
-        self._attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
+        self._attr_native_unit_of_measurement = UnitOfInformation.BYTES
         self._attr_device_class = SensorDeviceClass.DATA_SIZE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:delete-sweep"
@@ -112,8 +108,7 @@ class PBSGCSensor(PBSBaseEntity, SensorEntity):
         gc_data = self.coordinator.data["datastores"].get(self.store_name, {}).get("gc")
         if not gc_data:
             return None
-        removed = gc_data.get("removed-bytes")
-        return round(removed / (1024**3), 2) if removed is not None else 0
+        return gc_data.get("removed-bytes")
 
 class PBSNodeSensor(PBSBaseEntity, SensorEntity):
     def __init__(self, coordinator, sensor_type, unit):
