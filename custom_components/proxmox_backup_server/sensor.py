@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from homeassistant.components.sensor import (
     SensorEntity, 
     SensorDeviceClass, 
@@ -27,13 +28,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
         entities.append(PBSDatastoreSensor(coordinator, store_name, "total"))
         entities.append(PBSDatastoreSensor(coordinator, store_name, "used"))
         entities.append(PBSDatastoreSensor(coordinator, store_name, "avail"))
+        entities.append(PBSGCSensor(coordinator, store_name, "removed_bytes"))
 
     # Node Sensors
     entities.append(PBSNodeSensor(coordinator, "cpu", PERCENTAGE))
-    entities.append(PBSNodeSensor(coordinator, "uptime", UnitOfTime.SECONDS))
     
-    # Task Sensor
-    entities.append(PBSTaskSensor(coordinator, "last_backup"))
+    # Task Sensors
+    entities.append(PBSTaskSensor(coordinator, "last_backup_status"))
+    entities.append(PBSTaskSensor(coordinator, "last_backup_time"))
 
     async_add_entities(entities)
 
@@ -67,12 +69,10 @@ class PBSDatastoreSensor(PBSBaseEntity, SensorEntity):
             self._attr_native_unit_of_measurement = UnitOfInformation.BYTES
             self._attr_device_class = SensorDeviceClass.DATA_SIZE
             self._attr_state_class = SensorStateClass.MEASUREMENT
-            # Suggesting GB/TB for the UI but keeping BYTES as native unit for HA to scale automatically
-            self._attr_suggested_unit_of_measurement = UnitOfInformation.GIGABYTES
 
     @property
     def native_value(self):
-        data = self.coordinator.data["datastores"].get(self.store_name)
+        data = self.coordinator.data["datastores"].get(self.store_name, {}).get("status")
         if not data:
             return None
         
@@ -82,6 +82,26 @@ class PBSDatastoreSensor(PBSBaseEntity, SensorEntity):
             return round((used / total * 100), 2) if total > 0 else 0
         
         return data.get(self.sensor_type)
+
+class PBSGCSensor(PBSBaseEntity, SensorEntity):
+    """Garbage Collection Sensors."""
+    def __init__(self, coordinator, store_name, sensor_type):
+        super().__init__(coordinator)
+        self.store_name = store_name
+        self._attr_name = f"{store_name} GC Removed"
+        self._attr_unique_id = f"pbs_{coordinator.config_entry.data['host']}_{store_name}_gc_removed"
+        self._attr_native_unit_of_measurement = UnitOfInformation.BYTES
+        self._attr_device_class = SensorDeviceClass.DATA_SIZE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:delete-sweep"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def native_value(self):
+        gc_data = self.coordinator.data["datastores"].get(self.store_name, {}).get("gc")
+        if not gc_data:
+            return None
+        return gc_data.get("removed-bytes")
 
 class PBSNodeSensor(PBSBaseEntity, SensorEntity):
     def __init__(self, coordinator, sensor_type, unit):
@@ -95,9 +115,6 @@ class PBSNodeSensor(PBSBaseEntity, SensorEntity):
         if sensor_type == "cpu":
             self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_icon = "mdi:cpu-64-bit"
-        elif sensor_type == "uptime":
-            self._attr_device_class = SensorDeviceClass.DURATION
-            self._attr_icon = "mdi:clock-outline"
 
     @property
     def native_value(self):
@@ -109,14 +126,25 @@ class PBSNodeSensor(PBSBaseEntity, SensorEntity):
 class PBSTaskSensor(PBSBaseEntity, SensorEntity):
     def __init__(self, coordinator, sensor_type):
         super().__init__(coordinator)
-        self._attr_name = "Last Backup Status"
-        self._attr_unique_id = f"pbs_{coordinator.config_entry.data['host']}_last_backup"
-        self._attr_icon = "mdi:backup-restore"
+        self.sensor_type = sensor_type
+        self._attr_name = "Last Backup Status" if sensor_type == "last_backup_status" else "Last Backup Time"
+        self._attr_unique_id = f"pbs_{coordinator.config_entry.data['host']}_{sensor_type}"
+        
+        if sensor_type == "last_backup_time":
+            self._attr_device_class = SensorDeviceClass.TIMESTAMP
+            self._attr_icon = "mdi:clock-check"
+        else:
+            self._attr_icon = "mdi:backup-restore"
 
     @property
     def native_value(self):
         tasks = self.coordinator.data.get("tasks", [])
-        backup_tasks = [t for t in tasks if t.get("worker_type") == "backup"]
-        if backup_tasks:
-            return backup_tasks[0].get("status")
-        return "Unknown"
+        backup_tasks = [t for t in tasks if t.get("worker_type") == "backup" and t.get("endtime") is not None]
+        if not backup_tasks:
+            return None
+            
+        last_task = backup_tasks[0]
+        if self.sensor_type == "last_backup_status":
+            return last_task.get("status")
+        elif self.sensor_type == "last_backup_time":
+            return datetime.fromtimestamp(last_task.get("starttime"))

@@ -23,7 +23,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ds_data = {}
             for ds in datastores:
                 store = ds["store"]
-                ds_data[store] = await client.get_datastore_status(store)
+                ds_data[store] = {
+                    "status": await client.get_datastore_status(store),
+                    "gc": await client.get_gc_status(store)
+                }
             
             return {
                 "datastores": ds_data,

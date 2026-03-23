@@ -37,7 +37,6 @@ class PBSClient:
     async def _api_call(self, method, endpoint, params=None):
         connector = aiohttp.TCPConnector(ssl=self.verify_ssl)
         async with aiohttp.ClientSession(connector=connector) as session:
-            # Try to use existing ticket or authenticate
             if not self.ticket:
                 if not await self._authenticate(session):
                     return None
@@ -48,7 +47,7 @@ class PBSClient:
             }
 
             async with session.request(method, f"{self.url}{endpoint}", headers=headers, params=params) as response:
-                if response.status == 401: # Ticket might have expired
+                if response.status == 401:
                     if await self._authenticate(session):
                         headers["Cookie"] = f"PBSAuthCookie={self.ticket}"
                         headers["CSRFPreventionToken"] = self.csrf_token
@@ -69,13 +68,17 @@ class PBSClient:
         res = await self._api_call("GET", f"/admin/datastore/{store}/status")
         return res.get("data") if res else None
 
-    async def get_tasks(self, limit=5):
+    async def get_gc_status(self, store):
+        """Get garbage collection status for a datastore."""
+        res = await self._api_call("GET", f"/admin/datastore/{store}/garbage-collection")
+        return res.get("data") if res else None
+
+    async def get_tasks(self, limit=50):
         params = {"limit": limit, "all": 1}
         res = await self._api_call("GET", "/nodes/localhost/tasks", params=params)
         return res.get("data", []) if res else []
 
     async def get_node_status(self):
         res = await self._api_call("GET", "/nodes")
-        # Find the first node (usually localhost or the PVE node name)
         nodes = res.get("data", []) if res else []
         return nodes[0] if nodes else {}
