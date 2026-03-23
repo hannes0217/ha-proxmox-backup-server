@@ -68,7 +68,8 @@ class PBSDatastoreSensor(PBSBaseEntity, SensorEntity):
             self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_icon = "mdi:chart-donut"
         elif sensor_type in ["total", "used", "avail"]:
-            self._attr_native_unit_of_measurement = UnitOfInformation.BYTES
+            # Hard-coding Gigabytes and manual rounding to ensure clean UI
+            self._attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
             self._attr_device_class = SensorDeviceClass.DATA_SIZE
             self._attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -78,12 +79,20 @@ class PBSDatastoreSensor(PBSBaseEntity, SensorEntity):
         if not data:
             return None
         
+        raw_value = data.get(self.sensor_type)
+        if raw_value is None:
+            return None
+
         if self.sensor_type == "used_percentage":
             total = data.get("total", 0)
             used = data.get("used", 0)
             return round((used / total * 100), 2) if total > 0 else 0
         
-        return data.get(self.sensor_type)
+        # Convert Bytes to Gigabytes for the UI
+        if self.sensor_type in ["total", "used", "avail"]:
+            return round(raw_value / (1024**3), 2)
+        
+        return raw_value
 
 class PBSGCSensor(PBSBaseEntity, SensorEntity):
     """Garbage Collection Sensors."""
@@ -92,7 +101,7 @@ class PBSGCSensor(PBSBaseEntity, SensorEntity):
         self.store_name = store_name
         self._attr_name = f"{store_name} GC Removed"
         self._attr_unique_id = f"pbs_{coordinator.config_entry.data['host']}_{store_name}_gc_removed"
-        self._attr_native_unit_of_measurement = UnitOfInformation.BYTES
+        self._attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
         self._attr_device_class = SensorDeviceClass.DATA_SIZE
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:delete-sweep"
@@ -103,7 +112,8 @@ class PBSGCSensor(PBSBaseEntity, SensorEntity):
         gc_data = self.coordinator.data["datastores"].get(self.store_name, {}).get("gc")
         if not gc_data:
             return None
-        return gc_data.get("removed-bytes")
+        removed = gc_data.get("removed-bytes")
+        return round(removed / (1024**3), 2) if removed is not None else 0
 
 class PBSNodeSensor(PBSBaseEntity, SensorEntity):
     def __init__(self, coordinator, sensor_type, unit):
@@ -160,7 +170,13 @@ class PBSTaskSensor(PBSBaseEntity, SensorEntity):
         else:
             return None
 
-        filtered_tasks = [t for t in tasks if t.get("worker_type") == target_type and t.get("endtime") is not None]
+        # Sort tasks by starttime to get the absolute newest one
+        filtered_tasks = sorted(
+            [t for t in tasks if t.get("worker_type") == target_type and t.get("endtime") is not None],
+            key=lambda x: x.get("starttime", 0),
+            reverse=True
+        )
+        
         if not filtered_tasks:
             return "None" if "status" in self.sensor_type else None
             
