@@ -36,6 +36,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     # Task Sensors
     entities.append(PBSTaskSensor(coordinator, "last_backup_status"))
     entities.append(PBSTaskSensor(coordinator, "last_backup_time"))
+    entities.append(PBSTaskSensor(coordinator, "last_gc_status"))
+    entities.append(PBSTaskSensor(coordinator, "last_verify_status"))
 
     async_add_entities(entities)
 
@@ -127,24 +129,43 @@ class PBSTaskSensor(PBSBaseEntity, SensorEntity):
     def __init__(self, coordinator, sensor_type):
         super().__init__(coordinator)
         self.sensor_type = sensor_type
-        self._attr_name = "Last Backup Status" if sensor_type == "last_backup_status" else "Last Backup Time"
+        
+        names = {
+            "last_backup_status": "Last Backup Status",
+            "last_backup_time": "Last Backup Time",
+            "last_gc_status": "Last GC Status",
+            "last_verify_status": "Last Verify Status"
+        }
+        self._attr_name = names.get(sensor_type, sensor_type.replace('_', ' ').capitalize())
         self._attr_unique_id = f"pbs_{coordinator.config_entry.data['host']}_{sensor_type}"
         
         if sensor_type == "last_backup_time":
             self._attr_device_class = SensorDeviceClass.TIMESTAMP
             self._attr_icon = "mdi:clock-check"
+        elif "status" in sensor_type:
+            self._attr_icon = "mdi:shield-check" if "verify" in sensor_type else "mdi:backup-restore"
         else:
-            self._attr_icon = "mdi:backup-restore"
+            self._attr_icon = "mdi:history"
 
     @property
     def native_value(self):
         tasks = self.coordinator.data.get("tasks", [])
-        backup_tasks = [t for t in tasks if t.get("worker_type") == "backup" and t.get("endtime") is not None]
-        if not backup_tasks:
+        
+        if self.sensor_type in ["last_backup_status", "last_backup_time"]:
+            target_type = "backup"
+        elif self.sensor_type == "last_gc_status":
+            target_type = "garbage_collection"
+        elif self.sensor_type == "last_verify_status":
+            target_type = "verify"
+        else:
             return None
+
+        filtered_tasks = [t for t in tasks if t.get("worker_type") == target_type and t.get("endtime") is not None]
+        if not filtered_tasks:
+            return "None" if "status" in self.sensor_type else None
             
-        last_task = backup_tasks[0]
-        if self.sensor_type == "last_backup_status":
+        last_task = filtered_tasks[0]
+        if "status" in self.sensor_type:
             return last_task.get("status")
-        elif self.sensor_type == "last_backup_time":
+        elif "time" in self.sensor_type:
             return datetime.fromtimestamp(last_task.get("starttime"))
